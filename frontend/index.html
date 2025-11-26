@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebRTC Stream Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    video {
+      width: 100%;
+      max-width: 640px;
+      background: #000;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    button.stop {
+      background: #f44336;
+    }
+    #status {
+      margin: 20px 0;
+      padding: 10px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    .error {
+      color: red;
+    }
+    .success {
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <h1>WebRTC Stream Test</h1>
+  <video id="v" autoplay muted playsinline></video>
+  <div>
+    <button id="start">Start WHIP Streaming</button>
+    <button id="stop" class="stop" disabled>Stop Streaming</button>
+  </div>
+  <div id="status">Ready to stream</div>
+
+  <script>
+    const start = document.getElementById('start');
+    const stop = document.getElementById('stop');
+    const video = document.getElementById('v');
+    const status = document.getElementById('status');
+    let pc = null;
+    let stream = null;
+
+    function updateStatus(message, isError = false) {
+      status.textContent = message;
+      status.className = isError ? 'error' : 'success';
+    }
+
+    start.onclick = async () => {
+      try {
+        updateStatus('Requesting camera/microphone access...');
+        
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        video.srcObject = stream;
+        updateStatus('Camera access granted. Connecting to MediaMTX...');
+
+        pc = new RTCPeerConnection({
+          iceServers: []
+        });
+        
+        // Log ICE candidates for debugging
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            console.log('ICE candidate:', event.candidate.candidate);
+          } else {
+            console.log('ICE gathering complete');
+          }
+        };
+        
+        // Log connection state changes
+        pc.onconnectionstatechange = () => {
+          console.log('Connection state:', pc.connectionState);
+          updateStatus(`Connection state: ${pc.connectionState}`);
+          if (pc.connectionState === 'connected') {
+            start.disabled = true;
+            stop.disabled = false;
+            updateStatus('Streaming connected! Triggering FFmpeg...');
+            // Trigger FFmpeg start when connection is established
+            fetch('http://localhost:5000/start/live', { method: 'POST' })
+              .then(res => res.json())
+              .then(data => {
+                if (data.status === 'success') {
+                  updateStatus('FFmpeg started! Stream should be forwarding to Owncast.');
+                } else {
+                  updateStatus('FFmpeg trigger failed: ' + data.message, true);
+                }
+              })
+              .catch(err => {
+                updateStatus('Error triggering FFmpeg: ' + err.message, true);
+                console.error('FFmpeg trigger error:', err);
+              });
+          } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+            updateStatus(`Connection ${pc.connectionState}. Check logs.`, true);
+          }
+        };
+        
+        // Log ICE connection state
+        pc.oniceconnectionstatechange = () => {
+          console.log('ICE connection state:', pc.iceConnectionState);
+          if (pc.iceConnectionState === 'failed') {
+            updateStatus('ICE connection failed. This may be a localhost issue.', true);
+          }
+        };
+
+        stream.getTracks().forEach(t => {
+          pc.addTrack(t, stream);
+          console.log('Added track:', t.kind);
+        });
+
+        updateStatus('Creating offer...');
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        
+        // Wait a moment for ICE candidates to be added to SDP
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        updateStatus('Sending offer to MediaMTX...');
+        console.log('Offer SDP:', offer.sdp.substring(0, 300));
+
+        const res = await fetch('http://localhost:8889/live/whip', {
+          method: "POST",
+          headers: {"Content-Type": "application/sdp"},
+          body: pc.localDescription.sdp
+        });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`HTTP error! status: ${res.status}, message: ${errorText}`);
+        }
+
+        const answer = await res.text();
+        console.log('Answer SDP:', answer.substring(0, 300));
+        
+        await pc.setRemoteDescription({
+          type: "answer",
+          sdp: answer
+        });
+        
+        updateStatus('Answer received. Waiting for connection...');
+
+        updateStatus('Streaming connected! Check MediaMTX logs for FFmpeg trigger.');
+      } catch (error) {
+        updateStatus(`Error: ${error.message}`, true);
+        console.error('Streaming error:', error);
+      }
+    };
+
+    stop.onclick = () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      video.srcObject = null;
+      start.disabled = false;
+      stop.disabled = true;
+      updateStatus('Streaming stopped');
+    };
+  </script>
+</body>
+</html>

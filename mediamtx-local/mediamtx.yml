@@ -1,0 +1,15 @@
+# WebRTC configuration for localhost
+webrtcAdditionalHosts:
+  - localhost
+  - 127.0.0.1
+
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+
+paths:
+  live:
+    publishUser: ""
+    publishPass: ""
+
+    # FFmpeg trigger is now handled by the frontend when WebRTC connection is established
+    # No need for runOnReady anymore

@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    restart: unless-stopped
+    ports:
+      - "1935:1935"     # RTMP publish
+      - "8554:8554"     # RTSP
+      - "8888:8888"     # HLS/UI
+      - "8889:8889"     # WHIP/WebRTC HTTP
+      - "8189:8189/udp" # WebRTC ICE/UDP
+      - "8000:8000/udp" # RTP
+      - "8001:8001/udp" # RTCP
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+      - ./start_ffmpeg.py:/start_ffmpeg.py:ro
+
+  ffmpeg:
+    image: jrottenberg/ffmpeg:5.1-alpine
+    container_name: ffmpeg
+    platform: linux/amd64
+    restart: unless-stopped
+    entrypoint: []
+    env_file:
+      - .env
+    ports:
+      - "5000:5000"
+    command: ["/bin/sh", "/startup.sh"]
+    volumes:
+      - ./start_server.py:/start_server.py:ro
+      - ./startup.sh:/startup.sh:ro
