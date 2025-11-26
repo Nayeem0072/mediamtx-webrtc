@@ -36,16 +36,23 @@ def start_ffmpeg():
     
     # Build ffmpeg command
     # Pull RTSP stream from mediamtx and push to Owncast
-    # Using RTSP instead of RTMP as it's more reliable for pulling streams
+    # Optimized for low latency streaming
     ffmpeg_cmd = [
         'ffmpeg',
         '-rtsp_transport', 'tcp',        # Use TCP for RTSP (more reliable)
+        '-fflags', '+nobuffer+genpts',   # Reduce buffering and generate PTS immediately
+        '-flags', 'low_delay',           # Low delay flag
+        '-strict', 'experimental',       # Allow experimental features
         '-i', MEDIAMTX_SOURCE,           # Input from mediamtx (RTSP)
         '-c:v', 'libx264',               # Video codec
-        '-preset', 'veryfast',           # Encoding preset
+        '-preset', 'ultrafast',          # Fastest encoding preset (lower latency)
+        '-tune', 'zerolatency',          # Zero latency tuning (minimize delay)
+        '-g', '30',                      # Keyframe every 30 frames (1s @ 30fps)
+        '-sc_threshold', '0',            # Disable scene change detection
         '-c:a', 'aac',                   # Audio codec
         '-b:a', '128k',                  # Audio bitrate
         '-f', 'flv',                     # Output format
+        '-flush_packets', '1',           # Flush packets immediately (reduce buffering)
         '-y',                            # Overwrite output files
         '-reconnect', '1',               # Reconnect on errors
         '-reconnect_at_eof', '1',        # Reconnect at end of file
