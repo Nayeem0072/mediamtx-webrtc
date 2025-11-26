@@ -41,7 +41,7 @@ Owncast Server (receives RTMP stream)
 
 ```bash
 git clone <your-repo-url>
-cd owncast-webrtc
+cd mediamtx-webrtc
 ```
 
 ### 2. Configure Owncast URL
@@ -54,7 +54,7 @@ cp .env.example .env
 Edit `.env` file with your Owncast RTMP URL:
 
 ```bash
-OWNCAST_URL=rtmp://your-owncast-server.com:1935/live/$$your-stream-key
+OWNCAST_URL=rtmp://your-owncast-server.com:1935/live/your-stream-key
 ```
 
 **Note**: Use `$$` to escape `$` in the stream key (e.g., `$$key123` becomes `$key123`)
@@ -94,7 +94,7 @@ npx http-server -p 8000
 Create a `.env` file in `mediamtx-local/` directory:
 
 ```bash
-OWNCAST_URL=rtmp://your-server:1935/live/$$stream-key
+OWNCAST_URL=rtmp://your-server:1935/live/stream-key
 ```
 
 ### MediaMTX Configuration
